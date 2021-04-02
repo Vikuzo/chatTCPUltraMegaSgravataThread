@@ -64,7 +64,6 @@ class chatWindow(tk.Frame):
     def __init__(self, width, height, username, choice, master=None):
         super().__init__(master)
         self.__username = username
-        self.__username += '>'
 
         if 's' == choice:
             self.serverSocket = SocketFunction.socket_tcp_generation()
@@ -88,7 +87,6 @@ class chatWindow(tk.Frame):
             self.chatArea.config(state='disabled')
 
             self.clientUsername = self.username_exchange()
-            self.clientUsername += '>'
 
             receivingThread = Thread(target=self.receive_message)
             receivingThread.start()
@@ -105,7 +103,6 @@ class chatWindow(tk.Frame):
             self.graphic_generation(width, height)
 
             self.clientUsername = self.username_exchange()
-            self.clientUsername += '>'
 
             receivingThread = Thread(target=self.receive_message)
             receivingThread.start()
@@ -115,6 +112,7 @@ class chatWindow(tk.Frame):
         self.__height = height
 
         self.master.title('Chat di '+self.__username)
+        self.__username += '>'
         self.master.geometry("%sx%s" % (width, height))
         self.master.resizable(False, False)
 
@@ -172,6 +170,11 @@ class chatWindow(tk.Frame):
             self.chatArea.insert('end', (self.clientUsername + message + '\n'))
             self.chatArea.yview('end')
             self.chatArea.config(state='disabled')
+
+            if 'bye' == message:
+                SocketFunction.send(self.clientSocket, 'bye')
+                keep = False
+                SocketFunction.client_close(self.clientSocket)
 
     def _resize_image(self, event):
         new_width = self.__width
