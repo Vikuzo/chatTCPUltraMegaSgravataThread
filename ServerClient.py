@@ -3,7 +3,7 @@ from tkinter import scrolledtext
 from threading import Thread
 from PIL import Image, ImageTk
 import Crittografia as Cr
-# import tkinter.font as tf
+import tkinter.font as tf
 import tkinter as tk
 import socket
 import SocketFunction
@@ -41,7 +41,7 @@ class choiceWindow(tk.Frame):
         username = self.entry.get()
         if '' != username:
             self.delete_all()
-            chat = chatWindow(500, 500, username, 's')
+            chat = chatWindow(500, 500, username, '', 's')
             chat.mainloop()
         else:
             messagebox.showerror('Errore di immissione', 'Il campo USERNAME non può rimanere vuoto!')
@@ -50,18 +50,28 @@ class choiceWindow(tk.Frame):
         username = self.entry.get()
         if '' != username:
             self.delete_all()
-            chat = chatWindow(500, 500, username, 'c')
-            chat.mainloop()
+            self.wordLabel = tk.Label(self.master, text='Inserire la chiave di crittografia')
+            self.wordLabel.place(relx=0.025, rely=0.1, relwidth=1, relheight=0.125)
+            self.wordButton = tk.Button(self.master, text='Mettiti in attesa',
+                                        command=lambda: self.chat_as_client(username, self.entry.get()))
+            self.wordButton.place(relx=0.25, rely=0.5, relwidth=0.5, relheight=0.125)
+            self.entry = tk.Entry(self.master)
+            self.entry.place(relx=0.25, rely=0.3, relwidth=0.5, relheight=0.125)
         else:
             messagebox.showerror('Errore di immissione', 'Il campo USERNAME non può rimanere vuoto!')
+
+    def chat_as_client(self, username, word):
+        chat = chatWindow(500, 500, username, word, 'c')
+        chat.mainloop()
 
 
 class chatWindow(tk.Frame):
     __width = 0
     __height = 0
     __username = ''
+    __word = ''
 
-    def __init__(self, width, height, username, choice, master=None):
+    def __init__(self, width, height, username, word, choice, master=None):
         super().__init__(master)
         with open('Configuration.yaml', 'r') as yamlconfig:
             config = yaml.load(yamlconfig, Loader=yaml.FullLoader)
@@ -70,6 +80,7 @@ class chatWindow(tk.Frame):
         self.__serverName = config['serverIP']
         self.__serverPort = config['serverPORT']
         self.__buffer = config['buffer']
+        self.__word = word
 
         if 's' == choice:
             self.serverSocket = SocketFunction.socket_tcp_generation()
@@ -93,6 +104,7 @@ class chatWindow(tk.Frame):
             self.chatArea.config(state='disabled')
 
             self.clientUsername = self.username_exchange()
+            self.exchange_word_server()
 
             receivingThread = Thread(target=self.receive_message)
             receivingThread.start()
@@ -109,6 +121,7 @@ class chatWindow(tk.Frame):
             self.graphic_generation(width, height)
 
             self.clientUsername = self.username_exchange()
+            self.exchange_word_client()
 
             receivingThread = Thread(target=self.receive_message)
             receivingThread.start()
@@ -150,6 +163,12 @@ class chatWindow(tk.Frame):
             messagebox.showerror('Errore', 'Errore in invio o ricezione del messaggio')
             return
 
+    def exchange_word_server(self):
+        self.__word = SocketFunction.receive(self.clientSocket, self.__buffer)
+
+    def exchange_word_client(self):
+        SocketFunction.send(self.clientSocket, self.__word)
+
     def send_message(self, message):
         if '' != message:
             self.entry.delete(0, tk.END)
@@ -158,19 +177,20 @@ class chatWindow(tk.Frame):
             self.chatArea.yview('end')
             self.chatArea.config(state='disabled')
             try:
-                matrix = Cr.generating_coding_matrix('casa', message)
-                encrypted_message = Cr.encrypt('casa', matrix)
+                matrix = Cr.generating_coding_matrix(self.__word, message)
+                encrypted_message = Cr.encrypt(self.__word, matrix)
+                self.show_matrix(matrix, self.__word, 'c')
                 SocketFunction.send(self.clientSocket, encrypted_message)
             except socket.error:
                 messagebox.showerror('Errore', 'Errore in invio')
                 return
 
     def receive_message(self):
-        keep = True
-
-        while keep:
+        while True:
             try:
-                message = Cr.decrypt(Cr.generating_decoding_matrix('casa', SocketFunction.receive(self.clientSocket, self.__buffer)))
+                message = SocketFunction.receive(self.clientSocket, self.__buffer)
+                matrix = Cr.generating_decoding_matrix(self.__word, message)
+                message = Cr.decrypt(matrix)
             except socket.error:
                 messagebox.showerror('Errore', 'Errore in ricezione')
                 return
@@ -181,12 +201,60 @@ class chatWindow(tk.Frame):
 
             if 'bye' == message:
                 SocketFunction.send(self.clientSocket, 'bye')
-                keep = False
                 SocketFunction.client_close(self.clientSocket)
+                return
 
-    '''def show_matrix(self, matrix, choice):
-        mW = matrix_window(200, 200, 'casa', matrix, choice)
-        mW.mainloop()'''
+            self.show_matrix(matrix, self.__word, 'd')
+
+    def show_matrix(self, matrix, word, choice):
+        self.frame.place_forget()
+        self.chatArea.place_forget()
+        self.entry.place_forget()
+        self.sendButton.place_forget()
+
+        self.matrixFrame = tk.Frame(self.master, bg='#6016a2', bd=5)
+        self.matrixFrame.place(relx=0.5, rely=0.100, relwidth=0.75, relheight=0.725, anchor='n')
+
+        fontStyle = tf.Font(family='Calibri', size=16)
+        fontStyle2 = tf.Font(family='Arial', size=12)
+
+        c = 0
+        for item in word:
+            self.label = tk.Label(self.matrixFrame, text=item, font=fontStyle, bg='#6016a2', bd=5)
+            self.label.grid(row=0, column=c)
+            c += 1
+
+        if 'c' == choice:
+            k = 0
+            for lists in matrix:
+                c = 1
+                for item in lists:
+                    self.label = tk.Label(self.matrixFrame, text=item, font=fontStyle2, bg='#6016a2', bd=5)
+                    self.label.grid(row=c, column=k)
+                    c += 1
+                k += 1
+        else:
+            k = 1
+            for lists in matrix:
+                c = 0
+                for item in lists:
+                    self.label = tk.Label(self.matrixFrame, text=item, font=fontStyle2, bg='#6016a2', bd=5)
+                    self.label.grid(row=k, column=c)
+                    c += 1
+                k += 1
+
+        self.goBackButton = tk.Button(self.matrixFrame, text='Torna ai messaggi', command=self.go_back_to_chat)
+        self.goBackButton.place(relx=0.5, rely=0.88, relwidth=0.75, relheight=0.100, anchor='n')
+
+    def go_back_to_chat(self):
+        self.goBackButton.destroy()
+        self.label.destroy()
+        self.matrixFrame.destroy()
+
+        self.frame.place(relx=0.5, rely=0.88, relwidth=0.75, relheight=0.100, anchor='n')
+        self.chatArea.place(relx=0.5, rely=0.100, relwidth=0.75, relheight=0.725, anchor='n')
+        self.entry.place(relx=0.135, rely=0.8925, relwidth=0.55, relheight=0.075)
+        self.sendButton.place(relx=0.70, rely=0.8925, relwidth=0.165, relheight=0.075)
 
     def _resize_image(self, event):
         new_width = self.__width
@@ -196,43 +264,6 @@ class chatWindow(tk.Frame):
 
         self.background_image = ImageTk.PhotoImage(self.image)
         self.background.configure(image=self.background_image)
-
-
-'''class matrix_window(tk.Frame):
-    def __init__(self, width, height, word, matrix, choice, master=None):
-        super().__init__(master)
-
-        self.master.title('Visualizzazione matrice')
-        self.master.geometry("%sx%s" % (width, height))
-        self.master.resizable(False, False)
-
-        fontStyle = tf.Font(family='Calibri', size=16)
-        fontStyle2 = tf.Font(family='Arial', size=12)
-
-        c = 0
-        for item in word:
-            self.label = tk.Label(self.master, text=item, font=fontStyle)
-            self.label.grid(row=0, column=c)
-            c += 1
-
-        if 'c' == choice:
-            k = 0
-            for lists in matrix:
-                c = 1
-                for item in lists:
-                    self.label = tk.Label(self.master, text=item, font=fontStyle2)
-                    self.label.grid(row=c, column=k)
-                    c += 1
-                k += 1
-        else:
-            k = 1
-            for lists in matrix:
-                c = 0
-                for item in lists:
-                    self.label = tk.Label(self.master, text=item, font=fontStyle2)
-                    self.label.grid(row=k, column=c)
-                    c += 1
-                k += 1'''
 
 
 def __main__():
