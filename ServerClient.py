@@ -1,10 +1,13 @@
-import SocketFunction
-import tkinter as tk
-from tkinter import scrolledtext
 from tkinter import messagebox
-from PIL import Image, ImageTk
-import socket
+from tkinter import scrolledtext
 from threading import Thread
+from PIL import Image, ImageTk
+import Crittografia as Cr
+# import tkinter.font as tf
+import tkinter as tk
+import socket
+import SocketFunction
+import yaml
 
 
 class choiceWindow(tk.Frame):
@@ -56,14 +59,17 @@ class choiceWindow(tk.Frame):
 class chatWindow(tk.Frame):
     __width = 0
     __height = 0
-    __serverName = 'localhost'
-    __serverPort = 55000
     __username = ''
-    __buffer = 1024
 
     def __init__(self, width, height, username, choice, master=None):
         super().__init__(master)
+        with open('Configuration.yaml', 'r') as yamlconfig:
+            config = yaml.load(yamlconfig, Loader=yaml.FullLoader)
+
         self.__username = username
+        self.__serverName = config['serverIP']
+        self.__serverPort = config['serverPORT']
+        self.__buffer = config['buffer']
 
         if 's' == choice:
             self.serverSocket = SocketFunction.socket_tcp_generation()
@@ -152,7 +158,9 @@ class chatWindow(tk.Frame):
             self.chatArea.yview('end')
             self.chatArea.config(state='disabled')
             try:
-                SocketFunction.send(self.clientSocket, message)
+                matrix = Cr.generating_coding_matrix('casa', message)
+                encrypted_message = Cr.encrypt('casa', matrix)
+                SocketFunction.send(self.clientSocket, encrypted_message)
             except socket.error:
                 messagebox.showerror('Errore', 'Errore in invio')
                 return
@@ -162,7 +170,7 @@ class chatWindow(tk.Frame):
 
         while keep:
             try:
-                message = SocketFunction.receive(self.clientSocket, self.__buffer)
+                message = Cr.decrypt(Cr.generating_decoding_matrix('casa', SocketFunction.receive(self.clientSocket, self.__buffer)))
             except socket.error:
                 messagebox.showerror('Errore', 'Errore in ricezione')
                 return
@@ -176,6 +184,10 @@ class chatWindow(tk.Frame):
                 keep = False
                 SocketFunction.client_close(self.clientSocket)
 
+    '''def show_matrix(self, matrix, choice):
+        mW = matrix_window(200, 200, 'casa', matrix, choice)
+        mW.mainloop()'''
+
     def _resize_image(self, event):
         new_width = self.__width
         new_height = self.__height
@@ -184,6 +196,43 @@ class chatWindow(tk.Frame):
 
         self.background_image = ImageTk.PhotoImage(self.image)
         self.background.configure(image=self.background_image)
+
+
+'''class matrix_window(tk.Frame):
+    def __init__(self, width, height, word, matrix, choice, master=None):
+        super().__init__(master)
+
+        self.master.title('Visualizzazione matrice')
+        self.master.geometry("%sx%s" % (width, height))
+        self.master.resizable(False, False)
+
+        fontStyle = tf.Font(family='Calibri', size=16)
+        fontStyle2 = tf.Font(family='Arial', size=12)
+
+        c = 0
+        for item in word:
+            self.label = tk.Label(self.master, text=item, font=fontStyle)
+            self.label.grid(row=0, column=c)
+            c += 1
+
+        if 'c' == choice:
+            k = 0
+            for lists in matrix:
+                c = 1
+                for item in lists:
+                    self.label = tk.Label(self.master, text=item, font=fontStyle2)
+                    self.label.grid(row=c, column=k)
+                    c += 1
+                k += 1
+        else:
+            k = 1
+            for lists in matrix:
+                c = 0
+                for item in lists:
+                    self.label = tk.Label(self.master, text=item, font=fontStyle2)
+                    self.label.grid(row=k, column=c)
+                    c += 1
+                k += 1'''
 
 
 def __main__():
