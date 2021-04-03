@@ -1,0 +1,3 @@
+serverIP: l'indirizzo ip del server es( il localhost:127.0.0.1)
+serverPORT: la porta del vostro server es( 55000 )
+buffer: di quanti byte deve essere grande il messaggio
